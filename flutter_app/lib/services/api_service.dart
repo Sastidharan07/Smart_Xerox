@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  final String baseUrl = 'https://smart-xerox-sdbv.onrender.com/'; // Use your backend IP and port
+  final String baseUrl = 'https://smart-xerox-sdbv.onrender.com'; // Use your backend IP and port
   final Duration timeout = const Duration(seconds: 15);
 
   Map<String, String> get _headers => {'Content-Type': 'application/json'};
