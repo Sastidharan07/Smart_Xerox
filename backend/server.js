@@ -183,7 +183,7 @@ app.post('/api/upload', upload.array('files', 10), async (req, res) => {
     const filePaths = files.map(f => f.path).join(',');
 
     const result = await runAsync(
-      `INSERT INTO orders (studentName, filePath, status, paymentMethod, amount, bin, lunchTime, pages, copies, printType, sides) VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO orders (studentName, filePath, status, paymentMethod, amount, bin, lunchTime, pages, copies, printType, sides) VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
       [studentName, filePaths, pm, parsedAmount, bin, lunchTime, parsedPages, parsedCopies, printType, sides]
     );
 
@@ -201,7 +201,7 @@ app.get('/api/orders/student', async (req, res) => {
     const name = req.query.name;
     if (!name) return res.status(400).json({ error: 'Missing student name (query param ?name=...)' });
 
-    const rows = await allAsync("SELECT * FROM orders WHERE studentName = ? ORDER BY id DESC", [name]);
+    const rows = await allAsync("SELECT * FROM orders WHERE studentName = $1 ORDER BY id DESC", [name]);
     res.json(rows);
   } catch (err) {
     console.error('Error fetching student orders:', err);
@@ -213,7 +213,7 @@ app.get('/api/orders/student', async (req, res) => {
 app.get('/api/orders/:id', async (req, res) => {
   try {
     const orderId = req.params.id;
-    const row = await getAsync("SELECT * FROM orders WHERE id = ?", [orderId]);
+    const row = await getAsync("SELECT * FROM orders WHERE id = $1", [orderId]);
     if (!row) return res.status(404).json({ error: "Order not found" });
     res.json(row);
   } catch (err) {
@@ -237,7 +237,7 @@ app.get('/api/orders', checkAdmin, async (req, res) => {
 app.post('/api/orders/:id/complete', checkAdmin, async (req, res) => {
   const orderId = req.params.id;
   try {
-    await runAsync("UPDATE orders SET status='completed' WHERE id = ?", [orderId]);
+    await runAsync("UPDATE orders SET status='completed' WHERE id = $1", [orderId]);
     res.json({ message: 'Order marked as completed' });
   } catch (err) {
     console.error('Error marking complete:', err);
@@ -249,7 +249,7 @@ app.post('/api/orders/:id/complete', checkAdmin, async (req, res) => {
 app.post('/api/orders/:id/print', checkAdmin, async (req, res) => {
   const orderId = req.params.id;
   try {
-    const order = await getAsync("SELECT * FROM orders WHERE id = ?", [orderId]);
+    const order = await getAsync("SELECT * FROM orders WHERE id = $1", [orderId]);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     if (!order.filePath) return res.status(400).json({ error: 'No files to print' });
 
@@ -310,11 +310,11 @@ app.get('/api/daily-payments', checkAdmin, async (req, res) => {
 
     const cashRow = await getAsync(
       `SELECT COUNT(*) AS cashCount, SUM(amount) AS cashTotal
-       FROM orders WHERE DATE(created_at)=? AND paymentMethod='cash'`, [dateQuery]
+       FROM orders WHERE DATE(created_at) = $1 AND paymentMethod='cash'`, [dateQuery]
     );
     const onlineRow = await getAsync(
       `SELECT COUNT(*) AS onlineCount, SUM(amount) AS onlineTotal
-       FROM orders WHERE DATE(created_at)=? AND paymentMethod='online'`, [dateQuery]
+       FROM orders WHERE DATE(created_at) = $1 AND paymentMethod='online'`, [dateQuery]
     );
 
     res.json({
@@ -394,13 +394,13 @@ app.post('/api/register', async (req, res) => {
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password are required' });
 
     const result = await runAsync(
-      `INSERT INTO students (name, department, year, rollno, email, password) VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO students (name, department, year, rollno, email, password) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
       [name, department, year, rollno, email, password]
     );
 
     res.json({ message: 'Student registered successfully', studentId: result.lastID });
   } catch (err) {
-    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    if (err.code === '23505') {
       res.status(400).json({ error: 'Email already exists' });
     } else {
       console.error('Registration error:', err);
@@ -415,7 +415,7 @@ app.post('/api/student/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
 
-    const student = await getAsync("SELECT * FROM students WHERE email = ? AND password = ?", [email, password]);
+    const student = await getAsync("SELECT * FROM students WHERE email = $1 AND password = $2", [email, password]);
     if (!student) return res.status(401).json({ error: 'Invalid email or password' });
 
     res.json({ message: 'Login successful', studentId: student.id, name: student.name });
@@ -429,7 +429,7 @@ app.post('/api/student/login', async (req, res) => {
 app.get('/api/student/profile/:id', async (req, res) => {
   try {
     const studentId = req.params.id;
-    const student = await getAsync("SELECT id, name, department, year, rollno, email, created_at FROM students WHERE id = ?", [studentId]);
+    const student = await getAsync("SELECT id, name, department, year, rollno, email, created_at FROM students WHERE id = $1", [studentId]);
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
     res.json(student);
@@ -443,8 +443,7 @@ app.get('/api/student/profile/:id', async (req, res) => {
 // NOTE: This is destructive. Keep it protected (admin session enforced).
 app.post('/api/reset-db', checkAdmin, async (req, res) => {
   try {
-    await runAsync("DELETE FROM orders");
-    await runAsync("DELETE FROM sqlite_sequence WHERE name='orders'"); // reset autoincrement
+    await runAsync("TRUNCATE TABLE orders RESTART IDENTITY CASCADE");
     res.json({ message: 'Database cleared' });
   } catch (err) {
     console.error('Error resetting DB', err);
