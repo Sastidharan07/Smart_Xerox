@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Admin Orders — Xerox</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body { background:#f4f6f8; }
+  .container { max-width:1100px; margin-top:30px; }
+  table { background:#fff; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.06); }
+  .badge-online { background:#198754; }
+  .badge-cash { background:#ff9800; color:#000; }
+  .btn-complete { border-radius:8px; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h2 class="mb-3 text-center">📋 Orders</h2>
+
+    <div class="row mb-3">
+      <div class="col-md-3">
+        <select id="statusFilter" class="form-select" onchange="loadOrders()">
+          <option value="all">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select id="paymentFilter" class="form-select" onchange="loadOrders()">
+          <option value="all">All Payment</option>
+          <option value="cash">Cash</option>
+          <option value="online">Online</option>
+        </select>
+      </div>
+      <div class="col-md-6 text-end">
+        <a href="/dashboard" class="btn btn-secondary me-2">Back to Dashboard</a>
+        <button class="btn btn-primary" onclick="loadOrders()">Refresh</button>
+      </div>
+    </div>
+
+    <table class="table table-hover">
+      <thead class="table-dark">
+        <tr>
+          <th>ID</th>
+          <th>Student</th>
+          <th>File</th>
+          <th>Amount (₹)</th>
+          <th>Pages</th>
+          <th>Copies</th>
+          <th>Print Type</th>
+          <th>Sides</th>
+          <th>Bin</th>
+          <th>Lunch Time</th>
+          <th>Status</th>
+          <th>Payment</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="ordersTable">
+        <tr><td colspan="14" class="text-center">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+<script>
+async function fetchJson(url, opts){ const res = await fetch(url, opts); if (!res.ok) throw await res.json(); return res.json(); }
+
+function formatDate(dt){ try { return new Date(dt).toLocaleString(); } catch { return dt || '-'; } }
+
+async function loadOrders(){
+  try {
+    const orders = await fetchJson('/api/orders');
+    const statusFilter = document.getElementById('statusFilter').value;
+    const paymentFilter = document.getElementById('paymentFilter').value;
+    const tbody = document.getElementById('ordersTable');
+    tbody.innerHTML = '';
+
+    if (!orders || orders.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="14" class="text-center">No orders</td></tr>';
+      return;
+    }
+
+    orders.forEach(o => {
+      if (statusFilter !== 'all' && o.status !== statusFilter) return;
+      if (paymentFilter !== 'all' && o.paymentMethod !== paymentFilter) return;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${o.id}</td>
+        <td>${o.studentName}</td>
+        <td>${o.filePath ? `<a href="/${o.filePath}" target="_blank">View</a>` : '-'}</td>
+        <td>${o.amount || 0}</td>
+        <td>${o.pages || '-'}</td>
+        <td>${o.copies || '-'}</td>
+        <td>${o.printType || '-'}</td>
+        <td>${o.sides || '-'}</td>
+        <td>${o.bin || '-'}</td>
+        <td>${o.lunchTime || '-'}</td>
+        <td>${o.status === 'completed' ? '<span class="badge bg-success">Completed</span>' : '<span class="badge bg-warning text-dark">Pending</span>'}</td>
+        <td>${o.paymentMethod === 'online' ? '<span class="badge badge-online">Online</span>' : '<span class="badge badge-cash">Cash</span>'}</td>
+        <td>${formatDate(o.created_at)}</td>
+        <td>
+          ${o.status === 'pending' ? `<button class="btn btn-sm btn-success btn-complete me-1" onclick="markComplete(${o.id})">Mark Complete</button>` : ''}
+          ${o.filePath ? `<button class="btn btn-sm btn-info" onclick="printOrder(${o.id})">Print</button>` : ''}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById('ordersTable').innerHTML = `<tr><td colspan="14" class="text-center text-danger">Error loading orders</td></tr>`;
+  }
+}
+
+async function markComplete(id){
+  if (!confirm('Mark order '+id+' as completed?')) return;
+  try {
+    const res = await fetch(`/api/orders/${id}/complete`, { method: 'POST' });
+    const json = await res.json();
+    alert(json.message || 'Updated');
+    loadOrders();
+  } catch (err) {
+    alert(err.error || 'Update failed');
+  }
+}
+
+async function printOrder(orderId) {
+  if (!confirm('Send print job for this order?')) return;
+  try {
+    const res = await fetch(`/api/orders/${orderId}/print`, { method: 'POST' });
+    const json = await res.json();
+    if (res.ok) {
+      alert(json.message || 'Print job sent');
+    } else {
+      alert(json.error || 'Print failed');
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Print failed');
+  }
+}
+
+loadOrders();
+setInterval(loadOrders, 5000);
+</script>
+</body>
+</html>

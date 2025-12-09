@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Admin Login — Xerox</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #eef2f7; height:100vh; display:flex; align-items:center; justify-content:center; }
+    .box { width:360px; background:#fff; padding:28px; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.08); }
+    h3 { color:#0d6efd; text-align:center; margin-bottom:18px; }
+    .msg { min-height:20px; text-align:center; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h3>🔐 Admin Login</h3>
+    <form id="loginForm">
+      <div class="mb-3">
+        <label class="form-label">Username</label>
+        <input id="username" class="form-control" required />
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Password</label>
+        <input id="password" type="password" class="form-control" required />
+      </div>
+      <button class="btn btn-primary w-100" type="submit">Login</button>
+      <div id="msg" class="msg text-danger"></div>
+    </form>
+  </div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const json = await res.json();
+    if (res.ok) {
+      window.location.href = '/dashboard';
+    } else {
+      document.getElementById('msg').innerText = json.error || 'Login failed';
+    }
+  } catch (err) {
+    document.getElementById('msg').innerText = 'Network error';
+  }
+});
+</script>
+</body>
+</html>
